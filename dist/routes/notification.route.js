@@ -1,0 +1,14 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const auth_middleware_1 = require("../middleware/auth.middleware");
+const Notification_controller_1 = require("../controller/Notification.controller");
+const router = (0, express_1.Router)();
+router.use(auth_middleware_1.authenticate);
+router.post("/device-token", Notification_controller_1.registerFcmToken);
+router.delete("/device-token", Notification_controller_1.unregisterFcmToken);
+router.get("/", Notification_controller_1.listNotifications);
+router.patch("/read-all", Notification_controller_1.readAllNotifications);
+router.patch("/:id/read", Notification_controller_1.readNotification);
+router.delete("/:id", Notification_controller_1.removeNotification);
+exports.default = router;

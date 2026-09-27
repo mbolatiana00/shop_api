@@ -1,0 +1,565 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+model User {
+  id         Int      @id @default(autoincrement())
+  name       String
+  email      String   @unique
+  password   String
+  phone      String?
+  role       UserRole @default(CLIENT)
+  isVerified Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  cart          Cart?
+  coupons       Coupon[]
+  driver        Driver?
+  orders        Order[]
+  otpTokens     OtpToken[]
+  notifications Notification[]
+  deviceTokens  DeviceToken[]
+
+  // Système e-mail
+  emails                  Email[]
+  emailVerificationTokens EmailVerificationToken[]
+  passwordResetTokens     PasswordResetToken[]
+}
+
+model OtpToken {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  code      String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([userId, used])
+}
+
+model EmailVerificationToken {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  tokenHash String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model PasswordResetToken {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  tokenHash String   @unique
+  attempts  Int      @default(0)
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Restaurant {
+  id       Int     @id @default(autoincrement())
+  name     String
+  email    String?
+  address  String
+  phone    String?
+  imageUrl String?
+
+  latitude  Float?
+  longitude Float?
+
+  isOpen Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  carts     Cart[]
+  coupons   Coupon[]
+  menuItems MenuItem[]
+  orders    Order[]
+
+  @@index([isOpen])
+  @@index([email])
+}
+
+model MenuItem {
+  id           Int @id @default(autoincrement())
+  restaurantId Int
+
+  name        String
+  description String?
+  price       Float
+  imageUrl    String?
+  isAvailable Boolean @default(true)
+  category    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  cartItems  CartItem[]
+  restaurant Restaurant  @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  orderItems OrderItem[]
+
+  @@index([restaurantId])
+  @@index([isAvailable])
+}
+
+model Cart {
+  id           Int  @id @default(autoincrement())
+  userId       Int  @unique
+  restaurantId Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  restaurant Restaurant? @relation(fields: [restaurantId], references: [id])
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  items CartItem[]
+
+  @@index([userId])
+  @@index([restaurantId], map: "Cart_restaurantId_fkey")
+}
+
+model CartItem {
+  id         Int @id @default(autoincrement())
+  cartId     Int
+  menuItemId Int
+  quantity   Int @default(1)
+
+  createdAt DateTime @default(now())
+
+  cart Cart @relation(fields: [cartId], references: [id], onDelete: Cascade)
+
+  menuItem MenuItem @relation(fields: [menuItemId], references: [id])
+
+  @@unique([cartId, menuItemId])
+  @@index([cartId])
+  @@index([menuItemId], map: "CartItem_menuItemId_fkey")
+}
+
+model Driver {
+  id          Int     @id @default(autoincrement())
+  userId      Int     @unique
+  licenseNo   String  @unique
+  isAvailable Boolean @default(true)
+
+  deliveries Delivery[]
+
+  user User @relation(fields: [userId], references: [id])
+
+  vehicle Vehicle?
+}
+
+model Vehicle {
+  id       Int @id @default(autoincrement())
+  driverId Int @unique
+
+  type        VehicleType
+  plateNumber String      @unique
+  color       String?
+  year        Int?
+
+  driver Driver @relation(fields: [driverId], references: [id])
+}
+
+model Order {
+  id Int @id @default(autoincrement())
+
+  userId       Int
+  restaurantId Int
+
+  status OrderStatus @default(PENDING)
+
+  pickupAddress   String
+  deliveryAddress String
+
+  pickupLat Float?
+  pickupLng Float?
+
+  deliveryLat Float?
+  deliveryLng Float?
+
+  totalPrice Float
+  note       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  couponId       Int?  @unique
+  discountAmount Float @default(0)
+
+  coupon   Coupon?   @relation(fields: [couponId], references: [id], onDelete: SetNull)
+  delivery Delivery?
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id])
+
+  user User @relation(fields: [userId], references: [id])
+
+  items OrderItem[]
+
+  payment Payment?
+
+  // E-mails liés à la commande
+  emails Email[]
+
+  @@index([couponId])
+  @@index([userId])
+  @@index([status])
+  @@index([restaurantId])
+}
+
+model OrderItem {
+  id Int @id @default(autoincrement())
+
+  orderId    Int
+  menuItemId Int?
+
+  name      String
+  quantity  Int
+  unitPrice Float
+
+  menuItem MenuItem? @relation(fields: [menuItemId], references: [id])
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([menuItemId], map: "OrderItem_menuItemId_fkey")
+}
+
+model Delivery {
+  id Int @id @default(autoincrement())
+
+  orderId  Int @unique
+  driverId Int
+
+  startedAt DateTime?
+  endedAt   DateTime?
+
+  status DeliveryStatus @default(ASSIGNED)
+
+  driver Driver @relation(fields: [driverId], references: [id])
+
+  order Order @relation(fields: [orderId], references: [id])
+
+  tracking Tracking[]
+
+  // E-mails liés à la livraison
+  emails Email[]
+
+  @@index([driverId])
+}
+
+model Tracking {
+  id Int @id @default(autoincrement())
+
+  deliveryId Int
+
+  latitude  Float
+  longitude Float
+  accuracy  Float?
+
+  createdAt DateTime @default(now())
+
+  delivery Delivery @relation(fields: [deliveryId], references: [id])
+
+  @@index([deliveryId, createdAt])
+}
+
+model Payment {
+  id      Int @id @default(autoincrement())
+  orderId Int @unique
+
+  amount Float
+  method PaymentMethod
+  status PaymentStatus @default(PENDING)
+
+  paidAt DateTime?
+
+  order Order @relation(fields: [orderId], references: [id])
+
+  // E-mails liés au paiement
+  emails Email[]
+}
+
+model Coupon {
+  id Int @id @default(autoincrement())
+
+  code String @unique
+
+  userId       Int
+  restaurantId Int
+
+  discountPercent Int @default(10)
+
+  status CouponStatus @default(ACTIVE)
+
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  order Order?
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([restaurantId])
+  @@index([status])
+}
+
+model Email {
+  id Int @id @default(autoincrement())
+
+  type   EmailType
+  status EmailStatus @default(PENDING)
+
+  recipient String
+  subject   String
+
+  body String @db.LongText
+
+  // ID fourni par SMTP/Nodemailer
+  messageId String?
+
+  // Date d'envoi
+  sentAt DateTime?
+
+  errorMessage String? @db.Text
+
+  userId     Int?
+  orderId    Int?
+  paymentId  Int?
+  deliveryId Int?
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  order Order? @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  payment Payment? @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+
+  delivery Delivery? @relation(fields: [deliveryId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([orderId])
+  @@index([paymentId])
+  @@index([deliveryId])
+  @@index([type])
+  @@index([status])
+  @@index([recipient])
+  @@index([createdAt])
+}
+
+model Notification {
+  id Int @id @default(autoincrement())
+
+  userId Int
+
+  title   String
+  message String
+
+  type   NotificationType
+  status NotificationStatus
+
+  read Boolean @default(false)
+
+  data String? @db.LongText
+
+  sentAt DateTime?
+  readAt DateTime?
+
+  createdAt DateTime? @default(now())
+  updatedAt DateTime? @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@index([read])
+  @@map("notification")
+}
+
+model DeviceToken {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  token     String   @unique @db.VarChar(512)
+  platform  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+enum UserRole {
+  ADMIN
+  CLIENT
+  DRIVER
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PICKED_UP
+  IN_TRANSIT
+  DELIVERED
+  CANCELED
+}
+
+enum DeliveryStatus {
+  ASSIGNED
+  EN_ROUTE
+  PICKED_UP
+  IN_TRANSIT
+  DELIVERED
+  FAILED
+}
+
+enum VehicleType {
+  BIKE
+  MOTORBIKE
+  CAR
+}
+
+enum PaymentMethod {
+  CARD
+  MOBILE_MONEY
+  WALLET
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum NotificationType {
+  ORDER_CREATED
+  ORDER_ACCEPTED
+  ORDER_PREPARING
+  ORDER_READY
+  ORDER_DELIVERING
+  ORDER_DELIVERED
+
+  PAYMENT_SUCCESS
+  PAYMENT_FAILED
+
+  DRIVER_ASSIGNED
+
+  PROMOTION
+  SYSTEM
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+enum CouponStatus {
+  ACTIVE
+  USED
+  EXPIRED
+}
+
+enum EmailType {
+  // AUTHENTIFICATION
+  WELCOME
+  OTP
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+  PASSWORD_CHANGED
+  ACCOUNT_VERIFIED
+  LOGIN_ALERT
+
+  // COMMANDES
+  ORDER_RECEIVED
+  ORDER_CONFIRMED
+  ORDER_PREPARING
+  ORDER_READY
+  ORDER_PICKED_UP
+  ORDER_IN_TRANSIT
+  ORDER_DELIVERED
+  ORDER_CANCELED
+
+  // LIVRAISON
+  DRIVER_ASSIGNED
+  DELIVERY_STARTED
+  DRIVER_NEARBY
+  DELIVERY_COMPLETED
+  DELIVERY_FAILED
+
+  // PAIEMENT
+  PAYMENT_PENDING
+  PAYMENT_SUCCESS
+  PAYMENT_FAILED
+  PAYMENT_REFUNDED
+  PAYMENT_RECEIPT
+
+  // AVIS
+  REVIEW_REQUEST
+  REVIEW_RECEIVED
+
+  // PROMOTION
+  PROMOTION
+  COUPON
+  SPECIAL_OFFER
+
+  // COMPTE
+  PROFILE_UPDATED
+  PHONE_CHANGED
+  EMAIL_CHANGED
+
+  // RESTAURANT
+  RESTAURANT_ORDER_RECEIVED
+  RESTAURANT_ORDER_CONFIRMED
+  RESTAURANT_ORDER_CANCELED
+
+  // DRIVER
+  DRIVER_NEW_DELIVERY
+  DRIVER_DELIVERY_CANCELED
+
+  // ADMIN
+  ADMIN_NEW_USER
+  ADMIN_NEW_ORDER
+  ADMIN_PAYMENT_ALERT
+
+  // SYSTEM
+  SYSTEM_NOTIFICATION
+}
+
+enum EmailStatus {
+  PENDING
+  SENT
+  FAILED
+}
